@@ -1,21 +1,17 @@
 package org.rafferty.parse;
 
-import org.apache.commons.lang3.SerializationUtils;
 import org.rafferty.invertedindex.*;
 
 import java.io.*;
-import java.nio.Buffer;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
 import java.util.zip.GZIPInputStream;
-import org.rafferty.invertedindex.*;
 
 /*
 * This class processes our TREC file.  It loads pieces of the compressed file, decompresses, and passes individual
  * documents to DocumentParser object to be tokenized.
  */
 public class TRECProcessor {
-    private String fileName;
+    private final String fileName;
 
     private DocumentParser parser;
 
@@ -23,12 +19,16 @@ public class TRECProcessor {
 
     private FileMerger merger;
 
-    public TRECProcessor(String fileName, int bufferSize) {
+    public TRECProcessor(String fileName, int bufferSize){
         this.fileName = fileName;
         this.generator = new IntermediatePostingGenerator(bufferSize);
         parser = new DocumentParser(generator);
-        merger = new FileMerger(this.generator);
-        System.out.println("trec processor object created.");
+        try{
+            merger = new FileMerger(this.generator);
+        }catch(IOException e){
+            e.printStackTrace();
+        }
+//        System.out.println("trec processor object created.");
     }
 
     public void processFile() throws IOException {
@@ -76,36 +76,6 @@ public class TRECProcessor {
             }
         }
     }
-
-//    public List<PostingsList> deserialize(byte[] data){
-////        try{
-////            //parse byte array to map
-////            ByteArrayInputStream byteIn = new ByteArrayInputStream(data);
-////            ObjectInputStream in = new ObjectInputStream(byteIn);
-////            HashMap<String, HashMap<String, Integer>> deserializedMap = (HashMap<String, HashMap<String, Integer>>) in.readObject();
-////            return deserializedMap;
-////
-////        }catch (Exception e){
-////            e.printStackTrace();
-////            return new HashMap<>();
-////        }
-//        List<PostingsList> list = null;
-//        try{
-//            ByteArrayInputStream bis = new ByteArrayInputStream(data);
-//            ObjectInputStream ois = new ObjectInputStream(bis);
-//            while(true){
-//                try{
-//                    list = (List<PostingsList>) SerializationUtils.deserialize(data);
-//                }catch(Exception e){
-//                    e.printStackTrace();
-//                }
-//            }
-//        }catch(Exception e){
-//            e.printStackTrace();
-//        }
-//
-//        return list;
-//    }
 
     public String readDataFromFile(File file) throws IOException{
         try{

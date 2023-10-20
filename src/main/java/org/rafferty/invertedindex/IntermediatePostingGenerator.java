@@ -60,8 +60,12 @@ public class IntermediatePostingGenerator {
 
     public static void main(String[] args) {
         IntermediatePostingGenerator generator = new IntermediatePostingGenerator(100);
-        FileMerger merger = new FileMerger(generator);
-        merger.merge("../temp-files.bin");
+        try{
+            FileMerger merger = new FileMerger(generator);
+            merger.merge("../temp-files.bin");
+        }catch(IOException e){
+            e.printStackTrace();
+        }
 //        try {
 //            FileInputStream fis = new FileInputStream("../merged-index-2.bin");
 //            ObjectInputStream ois = new ObjectInputStream(fis);

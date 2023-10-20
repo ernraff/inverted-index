@@ -1,6 +1,7 @@
 package org.rafferty.invertedindex;
 
 import java.io.*;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -8,18 +9,45 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /*
-* Merges k sorted files.  Begin by adding first element of each file to a min heap, writing heap contents to output file, so on
-* until we have a complete merged file.  Delete temp files.
+* Merges k sorted files.  Track necessary metadata.  Var-byte encode document IDs and frequencies.  Write to file, concurrently building lexicon.
 */
 public class FileMerger {
-
+    private static String mergedFilename = "../final-index.bin";
     private IntermediatePostingGenerator generator;
-    int postingsPerFile;
+    private Lexicon lexicon;
+    private int blockSize = 64; // number of postings per block
+    private List<Integer> docIds;
+    private List<Integer> frequencies;
+    private List<byte[]> encodedIds;
+    private List<byte[]> encodedFrequencies;
+    private List<Integer> lastDocIDs;
+    private List<Integer> docIdBlockSizes;
+    private List<Integer> frequencyBlockSizes;
+    private int numPostingsLastBlock = 0;
+    private int numOfBlocks = 0;
+    private String currentTerm;
+    private File file;
+    private FileOutputStream fis;
+    private ObjectOutputStream oos;
+    private FileChannel channel;
 
+    private long fileSize = 0L;
 
-    public FileMerger(IntermediatePostingGenerator generator) {
+    public FileMerger(IntermediatePostingGenerator generator) throws IOException {
         this.generator = generator;
-        postingsPerFile = this.generator.getBufferSize(); //gets number of posting objects per file.
+        //initialize all lists
+        docIds = new ArrayList<>();
+        frequencies = new ArrayList<>();
+        encodedIds = new ArrayList<>();
+        encodedFrequencies = new ArrayList<>();
+        lastDocIDs = new ArrayList<>();
+        docIdBlockSizes = new ArrayList<>();
+        frequencyBlockSizes = new ArrayList<>();
+        lexicon = new Lexicon();
+        file = new File(mergedFilename);
+        fis = new FileOutputStream(file);
+        oos = new ObjectOutputStream(fis);
+        channel = fis.getChannel();
     }
 
     public void merge(String inputDirectory){
@@ -34,7 +62,7 @@ public class FileMerger {
 
 
         //initialize minHeap using overridden posting comparator method
-        PriorityQueue<PostingSorter> heap = new PriorityQueue<>((a,b) -> a.getPosting().compareTo(b.getPosting()));
+        PriorityQueue<PostingSortHelper> heap = new PriorityQueue<>((a, b) -> a.getPosting().compareTo(b.getPosting()));
         boolean allFilesEmpty = false;
 
         //iterate through files and create input stream
@@ -50,8 +78,7 @@ public class FileMerger {
         }
 
                 try {
-                    FileOutputStream fos = new FileOutputStream("../merged-index-4.bin");
-                    ObjectOutputStream oos = new ObjectOutputStream(fos);
+
                     //iterate through sorted files, get first object from each
                     for (ObjectInputStream ostream : ostreams) {
                         try {
@@ -61,7 +88,7 @@ public class FileMerger {
 
                             Posting p = (Posting) ostream.readObject();
 //                            System.out.println("got posting!");
-                            heap.offer(new PostingSorter(p, index));
+                            heap.offer(new PostingSortHelper(p, index));
 //                            System.out.println("added to heap!");
 
                         } catch (EOFException e) {
@@ -70,38 +97,63 @@ public class FileMerger {
                     }
 
                     while (!heap.isEmpty()) {
-                        PostingSorter ps = heap.poll();
-//                        CompressedPosting compressedPosting = new CompressedPosting(ps.getPosting());
-                        oos.writeObject(ps.getPosting());
+                        PostingSortHelper ps = heap.poll();
+                        if (!ps.getPosting().getTerm().equals(currentTerm)) {
+                            //initialize LexiconEntry
+                            LexiconEntry entry = new LexiconEntry();
+                            //get the number of postings in our last block
+                            numPostingsLastBlock = docIds.size();
+                            //set document count  and number of blocks in lexicon entry
+                            int documentCount = blockSize * (numOfBlocks - 1) + numPostingsLastBlock;
+                            entry.setDocumentCount(documentCount);
+                            entry.setNumOfBlocks(numOfBlocks);
+                            //write our chunk to file
+                            writeChunkToFile(entry);
+                            //clear all of our lists for the next chunk (next inverted list)
+                            resetChunk();
+                            //set currentTerm to next term
+                            this.currentTerm = ps.getPosting().getTerm();
+                            //add entry to lexicon
+                            lexicon.put(currentTerm, entry);
+                        }
+                        if (docIds.size() < blockSize) {
+                            docIds.add(ps.getPosting().getDocID());
+                            frequencies.add(ps.getPosting().getFrequency());
+                        } else {
+                            //we are at block size
+                            //store the last block id in each block
+                            numOfBlocks++;
+                            lastDocIDs.add(docIds.get(docIds.size() - 1));
+                            for (int docId : docIds) {
+                                byte[] encodedId = varByteEncode(docId);
+                                encodedIds.add(encodedId);
+                                docIdBlockSizes.add(encodedId.length);
+                            }
+                            for (int frequency : frequencies) {
+                                byte[] encodedFrequency = varByteEncode(frequency);
+                                encodedFrequencies.add(encodedFrequency);
+                                frequencyBlockSizes.add(encodedFrequency.length);
+                            }
+                        }
+
                         int index = ps.getIndex();
                         ObjectInputStream ostream = ostreams.get(index);
                         try {
                             Posting p = (Posting) ostream.readObject();
 //                            System.out.println("got posting!");
-                            heap.offer(new PostingSorter(p, index));
+                            heap.offer(new PostingSortHelper(p, index));
 //                            System.out.println("added to heap!");
-                        }catch (EOFException e){
+                        } catch (EOFException e) {
                             e.printStackTrace();
                         }
-
                     }
-
-//                    for(String file: temporaryFiles){
-//                        int i = temporaryFiles.indexOf(file);
-//                        try{
-//                            ostreams.get(i).readObject();
-//                            System.out.println("still some objects here!");
-//                        }catch (EOFException e){
-//                        }
-//                    }
-
-                    oos.close();
                 }catch(IOException | ClassNotFoundException e){
                     e.printStackTrace();
                 }
 
+                fileSize = file.length();
 
-        //close streams
+        //close streams;
         for(ObjectInputStream ostream: ostreams){
             try{
                 ostream.close();
@@ -117,17 +169,79 @@ public class FileMerger {
                 e.printStackTrace();
             }
         }
-
-        //delete temporary files
-//        for(String filePath: temporaryFiles){
-//            File file = new File(filePath);
-//            if(file.delete()){
-//                System.out.println("Temporary file successfully deleted.");
-//            }else{
-//                System.out.println("Failed to delete temporary file.");
-//            }
-//        }
-
     }
 
+    public byte[] varByteEncode(int data){
+        //find out how many bytes we need to represent the integer
+        int numBytes = ((32 - Integer.numberOfLeadingZeros(data)) + 6) / 7;
+        numBytes = numBytes > 0 ? numBytes : 1;
+        byte[] output = new byte[numBytes];
+        //for each byte of output
+        for(int i = 0; i < numBytes; i++){
+            //take least significant 7 bits of input and set MSB to 1
+            output[i] = (byte) ((data & 0b1111111) | 0b10000000);
+            //shift the input right by 7 places, discarding the 7 bits we just used.
+            data >>= 7;
+        }
+        //reset the MSB on teh last byte
+        output[0] &= 0b01111111;
+        return output;
+    }
+
+    //write chunk to file, update lexicon entry with start and end offsets for inverted list
+    public void writeChunkToFile(LexiconEntry entry){
+        try{
+            //add start position of list to lexicon entry
+            entry.setStartOffset(channel.position());
+            //write metadata to file
+            oos.writeObject(lastDocIDs);
+            oos.writeObject(docIdBlockSizes);
+            oos.writeObject(frequencyBlockSizes);
+            //write compressed document IDs and frequencies to file.
+            int i = 0;
+            int j = 0;
+            while(!encodedIds.isEmpty() && !encodedIds.isEmpty()){
+                //write
+                for(int n = 0; n < blockSize; n++){
+                    if(i < encodedIds.size()){
+                        oos.write(encodedIds.get(i));
+                        i++;
+                    }
+                }
+                for(int n = 0; n < blockSize; n++){
+                    if(j < encodedFrequencies.size()){
+                        oos.write(encodedFrequencies.get(j));
+                        j++;
+                    }
+                }
+            }
+            //add end position of list to lexicon entry
+            entry.setEndOffset(channel.position());
+        }catch (IOException e){
+            e.printStackTrace();
+        }
+    }
+
+    //clears all chunk data
+    public void resetChunk(){
+        docIds.clear();
+        encodedIds.clear();
+        frequencies.clear();
+        encodedFrequencies.clear();
+        lastDocIDs.clear();
+        docIdBlockSizes.clear();
+        frequencyBlockSizes.clear();
+        numPostingsLastBlock = 0;
+        numOfBlocks = 0;
+    }
+
+    public void closeOutputStreams() throws IOException{
+        oos.close();
+        channel.close();
+        fis.close();
+    }
+
+    public long getFileSize(){
+        return fileSize;
+    }
 }

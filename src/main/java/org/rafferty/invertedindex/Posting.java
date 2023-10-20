@@ -30,16 +30,11 @@ public class Posting implements Serializable,Comparable<Posting>{
         return term;
     }
 
+    //comparator for posting objects
     @Override
     public int compareTo(Posting otherPosting){
         if(this.getTerm().compareTo(otherPosting.getTerm()) == 0){
-            if(docID < otherPosting.getDocID()){
-                return -1;
-            }else if(docID > otherPosting.getDocID()){
-                return 1;
-            }else{
-                return 0;
-            }
+            Integer.compare(docID, otherPosting.getDocID());
         }
         return this.getTerm().compareTo(otherPosting.getTerm());
     }
@@ -47,28 +42,5 @@ public class Posting implements Serializable,Comparable<Posting>{
     public String toString(){
         return "Term: " + term + " DOCID: " + docID + " Frequency: " + frequency;
     }
-
-
-    //convert posting to byte array to be written to file
-//    public byte[] serialize(){
-//        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-//        ObjectOutputStream out = null;
-//        try {
-//            out = new ObjectOutputStream(bos);
-//            out.writeObject(this);
-//            out.flush();
-//            byte[] serializedPosting = bos.toByteArray();
-//            return bos.toByteArray();
-//        }catch(IOException e){
-//            e.printStackTrace();
-//            return new byte[0];
-//        }finally{
-//            try{
-//                bos.close();
-//            }catch (IOException e){
-//                //ignore
-//            }
-//        }
-//    }
 
 }
