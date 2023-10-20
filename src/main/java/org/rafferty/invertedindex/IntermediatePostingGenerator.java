@@ -7,6 +7,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/*
+* This class takes a list of Posting objects, sorts them, and writes them to intermediate files.
+* Intermediate files are not in their final form.
+*/
 public class IntermediatePostingGenerator {
     private List<Posting> postingBuffer;
     private int bufferSize;
@@ -56,16 +60,14 @@ public class IntermediatePostingGenerator {
         }
     }
 
-    public int getBufferSize(){return bufferSize;}
-
-    public static void main(String[] args) {
-        IntermediatePostingGenerator generator = new IntermediatePostingGenerator(100);
-        try{
-            FileMerger merger = new FileMerger(generator);
-            merger.merge("../temp-files.bin");
-        }catch(IOException e){
-            e.printStackTrace();
-        }
+//    public static void main(String[] args) {
+//        IntermediatePostingGenerator generator = new IntermediatePostingGenerator(100);
+//        try{
+//            FileMerger merger = new FileMerger(generator);
+//            merger.merge("../temp-files.bin");
+//        }catch(IOException e){
+//            e.printStackTrace();
+//        }
 //        try {
 //            FileInputStream fis = new FileInputStream("../merged-index-2.bin");
 //            ObjectInputStream ois = new ObjectInputStream(fis);
@@ -84,4 +86,4 @@ public class IntermediatePostingGenerator {
 //            e.printStackTrace();
 //        }
     }
-}
+//}

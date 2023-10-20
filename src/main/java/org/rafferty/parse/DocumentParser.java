@@ -1,6 +1,9 @@
 package org.rafferty.parse;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.text.BreakIterator;
 import java.util.*;
 import org.rafferty.invertedindex.*;
@@ -8,18 +11,19 @@ import org.rafferty.invertedindex.*;
 import java.util.regex.*;
 
 /*
- * This class parses through a document to extract docID, url, and document text.  It creates Posting objects which
- * are sent to the IntermediatePostingGenerator class for further processing
+ * This class parses through a document to extract url and document text.  It creates Posting objects which
+ * are sent to the IntermediatePostingGenerator class for further processing.
  */
 public class DocumentParser {
     private IntermediatePostingGenerator generator;
-//    private String currentDocID = null;
     private String currentURL = null;
     private int currentDocID = 1;
+    private PageTable pageTable;
 
     public DocumentParser(IntermediatePostingGenerator generator) {
         this.generator = generator;
-        System.out.println("Document Parser object created.");
+        this.pageTable = new PageTable();
+//        System.out.println("Document Parser object created.");
     }
 
     public void parse(String content) throws IOException {
@@ -27,6 +31,9 @@ public class DocumentParser {
         int docID = currentDocID;
         currentDocID++;
         String url = extractUrl(content);
+        //add document to page table
+        pageTable.put(docID, url);
+
         String text = extractText(content);
 
         // Tokenize the text and create Postings objects with term frequency
@@ -59,31 +66,14 @@ public class DocumentParser {
         generator.processPostings(postings);
     }
 
-    //extract document number
-//    private String extractDocNo(String content){
-//        try{
-//            Pattern docNoPattern = Pattern.compile("<DOCNO>(.*?)</DOCNO>", Pattern.DOTALL);
-//            Matcher matcher = docNoPattern.matcher(content);
-//            if(matcher.find()){
-//                System.out.println("Found doc ID!");
-//                return matcher.group(1);
-//            }else{
-//                return null;
-//            }
-//        }catch(Exception e){
-//            e.printStackTrace();
-//            return null;
-//        }
-//    }
-
     //use regex to extract url from document to be included in page table
     private String extractUrl(String content) {
         try{
             Pattern urlPattern = Pattern.compile("https?://[^\\s]+");
             Matcher matcher = urlPattern.matcher(content);
             if (matcher.find()) {
-                System.out.println("found url!");
-                System.out.println(matcher.group());
+//                System.out.println("found url!");
+//                System.out.println(matcher.group());
                 return matcher.group();
             } else {
                 return null;
@@ -94,6 +84,7 @@ public class DocumentParser {
         }
     }
 
+    //extract text from document
     private String extractText(String content) {
         // Use regular expression to extract the text content
         Pattern pattern = Pattern.compile("<TEXT>(.*?)</TEXT>", Pattern.DOTALL);
@@ -105,7 +96,7 @@ public class DocumentParser {
         return "";
     }
 
-
+    //get terms from text
     String[] tokenizeString(String s){
         s.replaceAll("\\p{C}", "?"); //remove non-printable characters from unicode string
         StringTokenizer st = new StringTokenizer(s, " \t\n\r\f!\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~");
@@ -115,9 +106,10 @@ public class DocumentParser {
             tokens[i] = st.nextToken().trim().toLowerCase(); //normalize tokens
             i++;
         }
-
         return tokens;
     }
 
-
+    public PageTable getPageTable() {
+        return pageTable;
+    }
 }

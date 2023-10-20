@@ -12,11 +12,8 @@ import java.util.zip.GZIPInputStream;
  */
 public class TRECProcessor {
     private final String fileName;
-
     private DocumentParser parser;
-
     private IntermediatePostingGenerator generator;
-
     private FileMerger merger;
 
     public TRECProcessor(String fileName, int bufferSize){
@@ -58,48 +55,36 @@ public class TRECProcessor {
                     }
                 }
             }
-
             System.out.println("File parsed successfully.");
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private static void decompress(InputStream compressedStream, File outputFile) throws IOException {
-        try (GZIPInputStream gzipStream = new GZIPInputStream(compressedStream);
-             FileOutputStream fileStream = new FileOutputStream(outputFile)) {
-
-            byte[] buffer = new byte[1024];
-            int len;
-            while ((len = gzipStream.read(buffer)) != -1) {
-                fileStream.write(buffer, 0, len);
-            }
-        }
-    }
-
-    public String readDataFromFile(File file) throws IOException{
-        try{
-            //read text data from file
-            BufferedReader reader = new BufferedReader(new FileReader(file));
-            String line;
-            StringBuilder sb = new StringBuilder();
-            //create byte array of same length as file
-//            byte[] arr = new byte[(int)file.length()];
-            while((line = reader.readLine()) != null){
-                sb.append(line);
-            }
-            //close FileInputStream object to avoid memory leakage
-            reader.close();
-            return sb.toString();
-        }catch(IOException e){
-            e.printStackTrace();
-            return null;
-        }
-    }
-
     public static void main(String[] args) throws Exception {
+        //get start time
+        long startTime = System.currentTimeMillis();
         TRECProcessor processor = new TRECProcessor("../msmarco-docs.trec.gz", 100);
         processor.processFile();
+
+        //write lexicon and page table to file
+        PageTable table = processor.parser.getPageTable();
+        table.write();
+        Lexicon lexicon = processor.merger.getLexicon();
+        lexicon.write();
+
+        //print total running time
+        long endTime = System.currentTimeMillis();
+        long milliseconds = endTime - startTime;
+        long seconds = milliseconds / 1000;
+        long minutes = (seconds / 60) % 60;
+        long hours = (seconds / (60 * 60)) % 24;
+        System.out.println("Total running time: " + String.format("%d:%02d:%02d",hours,minutes,seconds));
+        //print final file size in mb
+        long byteLength = processor.merger.getFileSize();
+        long MEGABYTE = 1024L * 1024L;
+        long megabyteLength = byteLength / MEGABYTE;
+        System.out.println("Final inverted index size: " + megabyteLength);
     }
 }
 

@@ -2,14 +2,18 @@ package org.rafferty.invertedindex;
 
 import java.io.*;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /*
-* Merges k sorted files.  Track necessary metadata.  Var-byte encode document IDs and frequencies.  Write to file, concurrently building lexicon.
+* Merge k sorted files.  Track necessary metadata.  Var-byte encode document IDs and frequencies.  Write to file, concurrently building lexicon.
 */
 public class FileMerger {
     private static String mergedFilename = "../final-index.bin";
@@ -65,7 +69,6 @@ public class FileMerger {
         PriorityQueue<PostingSortHelper> heap = new PriorityQueue<>((a, b) -> a.getPosting().compareTo(b.getPosting()));
         boolean allFilesEmpty = false;
 
-        //iterate through files and create input stream
         for(String file: temporaryFiles){
             try{
                 //create input streams for each file
@@ -77,81 +80,80 @@ public class FileMerger {
             }
         }
 
+        try {
+            //iterate through sorted files, get first object from each
+            for (ObjectInputStream ostream : ostreams) {
                 try {
-
-                    //iterate through sorted files, get first object from each
-                    for (ObjectInputStream ostream : ostreams) {
-                        try {
 //                            System.out.println("entering for loop!");
-                            //deserialize the posting and add to heap
-                            int index = ostreams.indexOf(ostream);
+                    //deserialize the posting and add to heap
+                    int index = ostreams.indexOf(ostream);
 
-                            Posting p = (Posting) ostream.readObject();
+                    Posting p = (Posting) ostream.readObject();
 //                            System.out.println("got posting!");
-                            heap.offer(new PostingSortHelper(p, index));
+                    heap.offer(new PostingSortHelper(p, index));
 //                            System.out.println("added to heap!");
 
-                        } catch (EOFException e) {
-                            e.printStackTrace();
-                        }
-                    }
-
-                    while (!heap.isEmpty()) {
-                        PostingSortHelper ps = heap.poll();
-                        if (!ps.getPosting().getTerm().equals(currentTerm)) {
-                            //initialize LexiconEntry
-                            LexiconEntry entry = new LexiconEntry();
-                            //get the number of postings in our last block
-                            numPostingsLastBlock = docIds.size();
-                            //set document count  and number of blocks in lexicon entry
-                            int documentCount = blockSize * (numOfBlocks - 1) + numPostingsLastBlock;
-                            entry.setDocumentCount(documentCount);
-                            entry.setNumOfBlocks(numOfBlocks);
-                            //write our chunk to file
-                            writeChunkToFile(entry);
-                            //clear all of our lists for the next chunk (next inverted list)
-                            resetChunk();
-                            //set currentTerm to next term
-                            this.currentTerm = ps.getPosting().getTerm();
-                            //add entry to lexicon
-                            lexicon.put(currentTerm, entry);
-                        }
-                        if (docIds.size() < blockSize) {
-                            docIds.add(ps.getPosting().getDocID());
-                            frequencies.add(ps.getPosting().getFrequency());
-                        } else {
-                            //we are at block size
-                            //store the last block id in each block
-                            numOfBlocks++;
-                            lastDocIDs.add(docIds.get(docIds.size() - 1));
-                            for (int docId : docIds) {
-                                byte[] encodedId = varByteEncode(docId);
-                                encodedIds.add(encodedId);
-                                docIdBlockSizes.add(encodedId.length);
-                            }
-                            for (int frequency : frequencies) {
-                                byte[] encodedFrequency = varByteEncode(frequency);
-                                encodedFrequencies.add(encodedFrequency);
-                                frequencyBlockSizes.add(encodedFrequency.length);
-                            }
-                        }
-
-                        int index = ps.getIndex();
-                        ObjectInputStream ostream = ostreams.get(index);
-                        try {
-                            Posting p = (Posting) ostream.readObject();
-//                            System.out.println("got posting!");
-                            heap.offer(new PostingSortHelper(p, index));
-//                            System.out.println("added to heap!");
-                        } catch (EOFException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }catch(IOException | ClassNotFoundException e){
+                } catch (EOFException e) {
                     e.printStackTrace();
                 }
+            }
 
-                fileSize = file.length();
+            while (!heap.isEmpty()) {
+                PostingSortHelper ps = heap.poll();
+                if (!ps.getPosting().getTerm().equals(currentTerm)) {
+                    //initialize LexiconEntry
+                    LexiconEntry entry = new LexiconEntry();
+                    //get the number of postings in our last block
+                    numPostingsLastBlock = docIds.size();
+                    //set document count  and number of blocks in lexicon entry
+                    int documentCount = blockSize * (numOfBlocks - 1) + numPostingsLastBlock;
+                    entry.setDocumentCount(documentCount);
+                    entry.setNumOfBlocks(numOfBlocks);
+                    //write our chunk to file
+                    writeChunkToFile(entry);
+                    //clear all of our lists for the next chunk (next inverted list)
+                    resetChunk();
+                    //set currentTerm to next term
+                    this.currentTerm = ps.getPosting().getTerm();
+                    //add entry to lexicon
+                    lexicon.put(currentTerm, entry);
+                }
+                if (docIds.size() < blockSize) {
+                    docIds.add(ps.getPosting().getDocID());
+                    frequencies.add(ps.getPosting().getFrequency());
+                } else {
+                    //we are at block size
+                    //store the last block id in each block
+                    numOfBlocks++;
+                    lastDocIDs.add(docIds.get(docIds.size() - 1));
+                    for (int docId : docIds) {
+                        byte[] encodedId = varByteEncode(docId);
+                        encodedIds.add(encodedId);
+                        docIdBlockSizes.add(encodedId.length);
+                    }
+                    for (int frequency : frequencies) {
+                        byte[] encodedFrequency = varByteEncode(frequency);
+                        encodedFrequencies.add(encodedFrequency);
+                        frequencyBlockSizes.add(encodedFrequency.length);
+                    }
+                }
+
+                int index = ps.getIndex();
+                ObjectInputStream ostream = ostreams.get(index);
+                try {
+                    Posting p = (Posting) ostream.readObject();
+//                            System.out.println("got posting!");
+                    heap.offer(new PostingSortHelper(p, index));
+//                            System.out.println("added to heap!");
+                } catch (EOFException e) {
+                    e.printStackTrace();
+                }
+            }
+        }catch(IOException | ClassNotFoundException e){
+            e.printStackTrace();
+        }
+
+        fileSize = file.length();
 
         //close streams;
         for(ObjectInputStream ostream: ostreams){
@@ -169,8 +171,22 @@ public class FileMerger {
                 e.printStackTrace();
             }
         }
+
+        try{
+            closeOutputStreams();
+        }catch(IOException e){
+            e.printStackTrace();
+        }
+
+        try{
+            deleteTemporaryFiles(inputDirectory);
+        }catch (IOException e){
+            e.printStackTrace();
+        }
+
     }
 
+    //use variable length byte encoding to compress document IDs and frequencies
     public byte[] varByteEncode(int data){
         //find out how many bytes we need to represent the integer
         int numBytes = ((32 - Integer.numberOfLeadingZeros(data)) + 6) / 7;
@@ -235,13 +251,35 @@ public class FileMerger {
         numOfBlocks = 0;
     }
 
+    //closes all output streams
     public void closeOutputStreams() throws IOException{
         oos.close();
         channel.close();
         fis.close();
     }
 
+    //deletes temporary files
+    public void deleteTemporaryFiles(String directory) throws IOException {
+        Path dir = Paths.get(directory); //path to the directory
+        Files
+                .walk(dir) // Traverse the file tree in depth-first order
+                .sorted(Comparator.reverseOrder())
+                .forEach(path -> {
+                    try {
+                        System.out.println("Deleting: " + path);
+                        Files.delete(path);  //delete each file or directory
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+    }
+
+    //get final size of file
     public long getFileSize(){
         return fileSize;
+    }
+
+    public Lexicon getLexicon(){
+        return lexicon;
     }
 }
