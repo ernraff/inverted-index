@@ -1,13 +1,8 @@
 package org.rafferty.parse;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.text.BreakIterator;
 import java.util.*;
 import org.rafferty.invertedindex.*;
-
 import java.util.regex.*;
 
 /*

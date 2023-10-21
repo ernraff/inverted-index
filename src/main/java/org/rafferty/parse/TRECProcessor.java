@@ -64,7 +64,7 @@ public class TRECProcessor {
     public static void main(String[] args) throws Exception {
         //get start time
         long startTime = System.currentTimeMillis();
-        TRECProcessor processor = new TRECProcessor("../msmarco-docs.trec.gz", 100);
+        TRECProcessor processor = new TRECProcessor("../msmarco-docs.trec.gz", 1000);
         processor.processFile();
 
         //write lexicon and page table to file
