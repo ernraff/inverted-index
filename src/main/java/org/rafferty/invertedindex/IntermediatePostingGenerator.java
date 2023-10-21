@@ -28,12 +28,15 @@ public class IntermediatePostingGenerator {
 
     //add postings to "buffer" list. when list reaches a certain number of postings, the postings will be written to file and the list will be cleared.
     public void processPostings(List<Posting> postings) {
-        Collections.sort(postings, (a,b)-> a.compareTo(b));
         for (Posting posting : postings) {
             if (postingBuffer.size() < bufferSize) {
+                //if posting buffer is not full, add posting to buffer
                 postingBuffer.add(posting);
             } else {
+                //if buffer is full, sort postings and write to file
+                Collections.sort(postingBuffer, (a,b)-> a.compareTo(b));
                 writePostingsToFile();
+                //clear list and add current posting
                 postingBuffer.clear();
                 postingBuffer.add(posting);
             }
@@ -42,48 +45,38 @@ public class IntermediatePostingGenerator {
 
     public void writePostingsToFile() {
         System.out.println("writing postings to file");
-        //create filePath for temporary file
+        // Create filePath for temporary file
         String timeStamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new java.util.Date());
         String filePath = TEMP_DIRECTORY + "/" + timeStamp;
+        FileOutputStream fos = null;
+        ObjectOutputStream out = null;
+
         try {
-            FileOutputStream fos = new FileOutputStream(filePath);
-            ObjectOutputStream out = new ObjectOutputStream(fos);
+            fos = new FileOutputStream(filePath);
+            out = new ObjectOutputStream(fos);
             for (Posting posting : postingBuffer) {
                 out.writeObject(posting);
                 System.out.println("posting written to " + filePath);
             }
-            out.close();
-            fos.close();
+            out.flush();
         } catch (IOException e) {
-
             e.printStackTrace();
+        } finally {
+            // Close the streams
+            try {
+                if (out != null) {
+                    out.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            try {
+                if (fos != null) {
+                    fos.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
-
-//    public static void main(String[] args) {
-//        IntermediatePostingGenerator generator = new IntermediatePostingGenerator(100);
-//        try{
-//            FileMerger merger = new FileMerger(generator);
-//            merger.merge("../temp-files.bin");
-//        }catch(IOException e){
-//            e.printStackTrace();
-//        }
-//        try {
-//            FileInputStream fis = new FileInputStream("../merged-index-2.bin");
-//            ObjectInputStream ois = new ObjectInputStream(fis);
-//            while (true) {
-//                try {
-//                    Posting posting = (Posting) ois.readObject();
-//                    System.out.println(posting.toString());
-//                    System.out.println("------------------------------------------------------------------------------------------------------");
-//                } catch (EOFException e) {
-//                    break;
-//                } catch (ClassNotFoundException e) {
-//                    e.printStackTrace();
-//                }
-//            }
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-    }
-//}
+}
