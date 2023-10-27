@@ -33,4 +33,8 @@ public class PageTable {
             e.printStackTrace();
         }
     }
+
+    public HashMap<Integer, String> getTable(){
+        return table;
+    }
 }

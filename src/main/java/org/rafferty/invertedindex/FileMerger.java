@@ -11,6 +11,9 @@ import java.util.List;
 import java.util.PriorityQueue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import com.esotericsoftware.kryo.*;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 
 /*
 * Merge k sorted files.  Track necessary metadata.  Var-byte encode document IDs and frequencies.  Write to file, concurrently building lexicon.
@@ -31,11 +34,18 @@ public class FileMerger {
     private int numOfBlocks = 0;
     private String currentTerm;
     private File file;
-    private FileOutputStream fis;
-    private ObjectOutputStream oos;
+    private FileOutputStream fos;
+
+    private BufferedOutputStream bos;
+//    private ObjectOutputStream oos;
     private FileChannel channel;
 
     private long fileSize = 0L;
+
+    private static int outPutBufferSize = 20000000;
+    private static int inPutBufferSize = 5000000;
+    private Kryo kryo;
+    private Output output;
 
     public FileMerger(IntermediatePostingGenerator generator) throws IOException {
         this.generator = generator;
@@ -49,9 +59,13 @@ public class FileMerger {
         frequencyBlockSizes = new ArrayList<>();
         lexicon = new Lexicon();
         file = new File(mergedFilename);
-        fis = new FileOutputStream(file);
-        oos = new ObjectOutputStream(fis);
-        channel = fis.getChannel();
+        fos = new FileOutputStream(file);
+        bos = new BufferedOutputStream(fos, outPutBufferSize);
+//        oos = new ObjectOutputStream(bos);
+        channel = fos.getChannel();
+        kryo = new Kryo();
+        output = new Output(bos);
+
     }
 
     public void merge(String inputDirectory){
@@ -62,8 +76,11 @@ public class FileMerger {
                                                 .collect(Collectors.toList());
 
         List<FileInputStream> fstreams = new ArrayList<>();
-        List<ObjectInputStream> ostreams = new ArrayList<>();
-
+        List<BufferedInputStream> bufferedStreams = new ArrayList<>();
+//        List<ObjectInputStream> ostreams = new ArrayList<>();
+//        List<Kryo> kryos = new ArrayList<>();
+        List<Input> inputs = new ArrayList<>();
+        Kryo kryo = new Kryo();
 
         //initialize minHeap using overridden posting comparator method
         PriorityQueue<PostingSortHelper> heap = new PriorityQueue<>((a, b) -> a.getPosting().compareTo(b.getPosting()));
@@ -74,7 +91,11 @@ public class FileMerger {
                 //create input streams for each file
                 FileInputStream fis = new FileInputStream(file);
                 fstreams.add(fis);
-                ostreams.add(new ObjectInputStream(fis));
+                BufferedInputStream bufferedStream = new BufferedInputStream(fis, inPutBufferSize);
+                bufferedStreams.add(bufferedStream);
+//                ostreams.add(new ObjectInputStream(bufferedStream));
+//                kryos.add(new Kryo());
+                inputs.add(new Input(bufferedStream));
             }catch(IOException e){
                 e.printStackTrace();
             }
@@ -82,18 +103,21 @@ public class FileMerger {
 
         try {
             //iterate through sorted files, get first object from each
-            for (ObjectInputStream ostream : ostreams) {
+            for (Input input : inputs) {
                 try {
 //                            System.out.println("entering for loop!");
                     //deserialize the posting and add to heap
-                    int index = ostreams.indexOf(ostream);
+                    int index = inputs.indexOf(input);
 
-                    Posting p = (Posting) ostream.readObject();
+                    Posting p = new Posting();
+                    p.read(kryo, input);
+
+//                    Posting p = (Posting) ostream.readObject();
 //                            System.out.println("got posting!");
                     heap.offer(new PostingSortHelper(p, index));
 //                            System.out.println("added to heap!");
 
-                } catch (EOFException e) {
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
@@ -101,6 +125,7 @@ public class FileMerger {
             while (!heap.isEmpty()) {
                 PostingSortHelper ps = heap.poll();
                 if (!ps.getPosting().getTerm().equals(currentTerm)) {
+
                     //initialize LexiconEntry
                     LexiconEntry entry = new LexiconEntry();
                     //get the number of postings in our last block
@@ -139,30 +164,33 @@ public class FileMerger {
                 }
 
                 int index = ps.getIndex();
-                ObjectInputStream ostream = ostreams.get(index);
+//                ObjectInputStream ostream = ostreams.get(index);
+                Input input = inputs.get(index);
                 try {
-                    Posting p = (Posting) ostream.readObject();
+//                    Posting p = (Posting) ostream.readObject();
 //                            System.out.println("got posting!");
+                    Posting p = new Posting();
+                    p.read(kryo, input);
                     heap.offer(new PostingSortHelper(p, index));
 //                            System.out.println("added to heap!");
-                } catch (EOFException e) {
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
-        }catch(IOException | ClassNotFoundException e){
+        }catch(Exception e){
             e.printStackTrace();
         }
 
         fileSize = file.length();
 
         //close streams;
-        for(ObjectInputStream ostream: ostreams){
-            try{
-                ostream.close();
-            }catch (IOException e){
-                e.printStackTrace();
-            }
-        }
+//        for(ObjectInputStream ostream: ostreams){
+//            try{
+//                ostream.close();
+//            }catch (IOException e){
+//                e.printStackTrace();
+//            }
+//        }
 
         for(FileInputStream fstream: fstreams){
             try{
@@ -210,26 +238,32 @@ public class FileMerger {
             //add start position of list to lexicon entry
             entry.setStartOffset(channel.position());
             //write metadata to file
-            oos.writeObject(lastDocIDs);
-            oos.writeObject(docIdBlockSizes);
-            oos.writeObject(frequencyBlockSizes);
+//            oos.writeObject(lastDocIDs);
+//            oos.writeObject(docIdBlockSizes);
+//            oos.writeObject(frequencyBlockSizes);
+            kryo.writeObject(output, lastDocIDs);
+            kryo.writeObject(output, docIdBlockSizes);
+            kryo.writeObject(output, frequencyBlockSizes);
             //write compressed document IDs and frequencies to file.
             int i = 0;
             int j = 0;
-            while(!encodedIds.isEmpty() && !encodedIds.isEmpty()){
+            while(!encodedIds.isEmpty() && !encodedIds.isEmpty()) {
                 //write
-                for(int n = 0; n < blockSize; n++){
-                    if(i < encodedIds.size()){
-                        oos.write(encodedIds.get(i));
+                for (int n = 0; n < blockSize; n++) {
+                    if (i < encodedIds.size()) {
+//                        oos.write(encodedIds.get(i));
+                        kryo.writeObject(output, encodedIds.get(i));
                         i++;
                     }
                 }
-                for(int n = 0; n < blockSize; n++){
-                    if(j < encodedFrequencies.size()){
-                        oos.write(encodedFrequencies.get(j));
+                for (int n = 0; n < blockSize; n++) {
+                    if (j < encodedFrequencies.size()) {
+//                        oos.write(encodedFrequencies.get(j));
+                        kryo.writeObject(output, encodedFrequencies.get(j));
                         j++;
                     }
                 }
+                System.out.println("Chunk written to file.");
             }
             //add end position of list to lexicon entry
             entry.setEndOffset(channel.position());
@@ -253,9 +287,10 @@ public class FileMerger {
 
     //closes all output streams
     public void closeOutputStreams() throws IOException{
-        oos.close();
+//        oos.close();
+        bos.close();
         channel.close();
-        fis.close();
+        fos.close();
     }
 
     //deletes temporary files
@@ -266,7 +301,7 @@ public class FileMerger {
                 .sorted(Comparator.reverseOrder())
                 .forEach(path -> {
                     try {
-                        System.out.println("Deleting: " + path);
+//                        System.out.println("Deleting: " + path);
                         Files.delete(path);  //delete each file or directory
                     } catch (IOException e) {
                         e.printStackTrace();

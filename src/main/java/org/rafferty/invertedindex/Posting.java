@@ -1,13 +1,15 @@
 package org.rafferty.invertedindex;
 
-import javax.xml.crypto.Data;
 import java.io.*;
+import com.esotericsoftware.kryo.*;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 
 /*
 * A Posting consists of term, document ID for a document containing that term, and number of occurrences of the term
 * within the document.
 */
-public class Posting implements Serializable,Comparable<Posting>{
+public class Posting implements Serializable,Comparable<Posting>, KryoSerializable{
     private String term;
     private int docID;
     private int frequency;
@@ -16,6 +18,9 @@ public class Posting implements Serializable,Comparable<Posting>{
         this.term = term;
         this.docID = docID;
         this.frequency = frequency;
+    }
+
+    public Posting(){
     }
 
     public int getFrequency() {
@@ -43,4 +48,17 @@ public class Posting implements Serializable,Comparable<Posting>{
         return "Term: " + term + " DOCID: " + docID + " Frequency: " + frequency;
     }
 
+    @Override
+    public void write(Kryo kryo, Output output) {
+        output.writeString(this.term);
+        output.writeInt(this.docID);
+        output.writeInt(this.frequency);
+    }
+
+    @Override
+    public void read(Kryo kryo, Input input) {
+        term = input.readString();
+        docID = input.readInt();
+        frequency = input.readInt();
+    }
 }

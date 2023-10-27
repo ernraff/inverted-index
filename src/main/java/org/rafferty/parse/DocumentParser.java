@@ -1,9 +1,20 @@
 package org.rafferty.parse;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
+
+import org.apache.commons.lang3.time.StopWatch;
 import org.rafferty.invertedindex.*;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.*;
+import java.io.BufferedWriter;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.time.StopWatch;
 
 /*
  * This class parses through a document to extract url and document text.  It creates Posting objects which
@@ -15,19 +26,28 @@ public class DocumentParser {
     private int currentDocID = 1;
     private PageTable pageTable;
 
+    private int totalDocsParsed = 0;
+
+//    private List<Posting>postingBuffer;
+
     public DocumentParser(IntermediatePostingGenerator generator) {
         this.generator = generator;
         this.pageTable = new PageTable();
 //        System.out.println("Document Parser object created.");
+//        postingBuffer = new ArrayList<>();
     }
 
-    public void parse(String content) throws IOException {
-        // Parse the document to extract URL, and text
-        int docID = currentDocID;
-        currentDocID++;
+    public List<Posting> parse(String content) throws IOException {
+        StopWatch stopWatch = StopWatch.createStarted();
+//        // Parse the document to extract URL, and text
         String url = extractUrl(content);
-        //add document to page table
+        //make sure that we haven't already processed this document
+
+        int docID = currentDocID;
+//            System.out.println("currentDocID in DocumentParser:"+docID);
+        currentDocID++;
         pageTable.put(docID, url);
+
 
         String text = extractText(content);
 
@@ -39,7 +59,7 @@ public class DocumentParser {
 
         // Count term frequency
         for (String term : terms) {
-            if (term != null && !term.isEmpty() && !term.contains("https")) {
+            if (term != null && !term.isEmpty() && !term.contains("https") && StringUtils.isAlphanumeric(term)) {
                 termFrequencies.put(term, termFrequencies.getOrDefault(term, 0) + 1);
             }
         }
@@ -55,10 +75,20 @@ public class DocumentParser {
             // Create a Posting for each term and add it to the list
             Posting posting = new Posting(term, docID, frequency);
             postings.add(posting);
+//                postingBuffer.add(posting);
         }
 
         // Send list of postings to the IntermediateIndexGenerator
-        generator.processPostings(postings);
+//            if(postingBuffer.size() >= 10000000){
+//                intermediatePostingExecutor.submit(()->generator.processPostings(postingBuffer));
+//            }
+//        generator.processPostings(postings);
+//            System.out.println("Sending to intermediate posting generator.");
+        stopWatch.stop();
+        totalDocsParsed++;
+        return postings;
+//            System.out.println("It takes " + stopWatch.getTime(TimeUnit.SECONDS) + " seconds to parse one document.");
+
     }
 
     //use regex to extract url from document to be included in page table
@@ -85,7 +115,8 @@ public class DocumentParser {
         Pattern pattern = Pattern.compile("<TEXT>(.*?)</TEXT>", Pattern.DOTALL);
         Matcher matcher = pattern.matcher(content);
         if (matcher.find()) {
-            System.out.println("found text!");
+//            System.out.println("Text: ");
+//            System.out.println(matcher.group(1));
             return matcher.group(1);
         }
         return "";
@@ -94,7 +125,7 @@ public class DocumentParser {
     //get terms from text
     String[] tokenizeString(String s){
         s.replaceAll("\\p{C}", "?"); //remove non-printable characters from unicode string
-        StringTokenizer st = new StringTokenizer(s, " \t\n\r\f!\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~");
+        StringTokenizer st = new StringTokenizer(s, " \t\n\r\f!\"#$%&()*+,-./:;<=>?@[\\]^_`{|}~--");
         String[] tokens = new String[st.countTokens()];
         int i = 0;
         while(st.hasMoreTokens() && i < tokens.length){
@@ -107,4 +138,8 @@ public class DocumentParser {
     public PageTable getPageTable() {
         return pageTable;
     }
+
+    public int getTotalDocsParsed(){return totalDocsParsed;}
+
+//    public List getBuffer(){return postingBuffer;};
 }
