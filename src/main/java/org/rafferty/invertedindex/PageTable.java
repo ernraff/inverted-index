@@ -1,10 +1,10 @@
 package org.rafferty.invertedindex;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
+import java.io.*;
+import java.nio.Buffer;
 import java.util.HashMap;
+import com.esotericsoftware.kryo.*;
+import com.esotericsoftware.kryo.io.Output;
 
 //stores URLs w/corresponding document IDs
 public class PageTable {
@@ -24,10 +24,10 @@ public class PageTable {
         try{
             File file = new File("../page-table.bin");
             FileOutputStream fos = new FileOutputStream(file);
-            ObjectOutputStream out = new ObjectOutputStream(fos);
-            out.writeObject(table);
-            out.flush();
-            out.close();
+            BufferedOutputStream bos = new BufferedOutputStream(fos);
+            Kryo kryo = new Kryo();
+            Output output = new Output(bos);
+            kryo.writeObject(output, table);
             fos.close();
         }catch(IOException e){
             e.printStackTrace();

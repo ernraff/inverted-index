@@ -8,8 +8,6 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import com.esotericsoftware.kryo.*;
 import org.apache.commons.lang3.time.StopWatch;
@@ -26,7 +24,6 @@ public class IntermediatePostingGenerator {
 //    private Object sortWriteLock;
 
     public IntermediatePostingGenerator(long bufferSize) throws IOException {
-//        postingBuffer = new ArrayList<>();
         this.bufferSize = bufferSize;
         File directory = new File(TEMP_DIRECTORY);
         //create directory for temp files if it does not already exist.
@@ -68,7 +65,6 @@ public class IntermediatePostingGenerator {
             //use buffered output stream to reduce I/O overhead
             fos = new FileOutputStream(filePath);
             bos = new BufferedOutputStream(fos);
-//            out = new ObjectOutputStream(bos);
             Kryo kryo = new Kryo();
             Output output = new Output(bos);
             int i = 0;
@@ -87,13 +83,6 @@ public class IntermediatePostingGenerator {
             e.printStackTrace();
         } finally {
             // Close the streams
-//            try {
-//                if (out != null) {
-//                    out.close();
-//                }
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
             try {
                 bos.close();
                 fos.close();
@@ -102,7 +91,6 @@ public class IntermediatePostingGenerator {
             }
         }
     }
-
     public List<Posting>getBuffer(){
         return postingBuffer;
     }

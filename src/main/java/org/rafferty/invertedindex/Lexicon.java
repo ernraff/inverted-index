@@ -1,10 +1,10 @@
 package org.rafferty.invertedindex;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
+import com.esotericsoftware.kryo.io.Output;
+
+import java.io.*;
 import java.util.HashMap;
+import com.esotericsoftware.kryo.*;
 
 public class Lexicon {
     private HashMap<String, LexiconEntry> lexicon = new HashMap<>();
@@ -21,10 +21,10 @@ public class Lexicon {
         try{
             File file = new File("../lexicon.bin");
             FileOutputStream fos = new FileOutputStream(file);
-            ObjectOutputStream out = new ObjectOutputStream(fos);
-            out.writeObject(lexicon);
-            out.flush();
-            out.close();
+            BufferedOutputStream bos = new BufferedOutputStream(fos);
+            Kryo kryo = new Kryo();
+            Output output = new Output(bos);
+            kryo.writeObject(output, lexicon);
             fos.close();
         }catch(IOException e){
             e.printStackTrace();

@@ -1,20 +1,11 @@
 package org.rafferty.parse;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
-
 import org.apache.commons.lang3.time.StopWatch;
 import org.rafferty.invertedindex.*;
-
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.*;
-import java.io.BufferedWriter;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.time.StopWatch;
 
 /*
  * This class parses through a document to extract url and document text.  It creates Posting objects which
@@ -28,13 +19,10 @@ public class DocumentParser {
 
     private int totalDocsParsed = 0;
 
-//    private List<Posting>postingBuffer;
-
     public DocumentParser(IntermediatePostingGenerator generator) {
         this.generator = generator;
         this.pageTable = new PageTable();
 //        System.out.println("Document Parser object created.");
-//        postingBuffer = new ArrayList<>();
     }
 
     public List<Posting> parse(String content) throws IOException {
@@ -75,15 +63,7 @@ public class DocumentParser {
             // Create a Posting for each term and add it to the list
             Posting posting = new Posting(term, docID, frequency);
             postings.add(posting);
-//                postingBuffer.add(posting);
         }
-
-        // Send list of postings to the IntermediateIndexGenerator
-//            if(postingBuffer.size() >= 10000000){
-//                intermediatePostingExecutor.submit(()->generator.processPostings(postingBuffer));
-//            }
-//        generator.processPostings(postings);
-//            System.out.println("Sending to intermediate posting generator.");
         stopWatch.stop();
         totalDocsParsed++;
         return postings;
@@ -141,5 +121,4 @@ public class DocumentParser {
 
     public int getTotalDocsParsed(){return totalDocsParsed;}
 
-//    public List getBuffer(){return postingBuffer;};
 }

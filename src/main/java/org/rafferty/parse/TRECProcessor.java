@@ -6,7 +6,6 @@ import org.rafferty.invertedindex.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 import org.apache.commons.lang3.time.StopWatch;
@@ -68,7 +67,7 @@ public class TRECProcessor {
 
                         generator.processPostings(postings);
 
-//                        if (parser.getTotalDocsParsed() == 100000) {
+//                        if (parser.getTotalDocsParsed() == 30000) {
 //                            return;
 //                        }
                     }
@@ -113,14 +112,15 @@ public class TRECProcessor {
         processor.processFile();
         stopWatch.stop();
         //check how long it takes to process file
-        System.out.println("It took " + stopWatch.getTime(TimeUnit.MINUTES) + " to process file and create temporary files.");
+//        System.out.println("It took " + stopWatch.getTime(TimeUnit.MINUTES) + " minutes to process file and create temporary files.");
 
         //merge files
-//        StopWatch mergerStopWatch = StopWatch.createStarted();
-//        System.out.println("Entering merge.");
-//        processor.merger.merge("../temp-files");
-//        mergerStopWatch.stop();
-//        System.out.println("It took " + mergerStopWatch.getTime(TimeUnit.SECONDS) + " to merge the temporary files into one sorted file.");
+        StopWatch mergerStopWatch = StopWatch.createStarted();
+        System.out.println("Entering merge.");
+        processor.merger.merge("../temp-files");
+        mergerStopWatch.stop();
+        System.out.println("It took " + stopWatch.getTime(TimeUnit.MINUTES) + " minutes to process file and create temporary files.");
+        System.out.println("It took " + mergerStopWatch.getTime(TimeUnit.MINUTES) + " minutes to merge the temporary files into one sorted file.");
 
         //write lexicon and page table to file
         PageTable table = processor.parser.getPageTable();
