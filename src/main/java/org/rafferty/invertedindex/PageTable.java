@@ -20,17 +20,16 @@ public class PageTable {
     }
 
     //write finished URL table to file
-    public void write(){
+    public void write() throws IOException {
+        ObjectOutputStream out = null;
         try{
-            File file = new File("../page-table.bin");
-            FileOutputStream fos = new FileOutputStream(file);
-            BufferedOutputStream bos = new BufferedOutputStream(fos);
-            Kryo kryo = new Kryo();
-            Output output = new Output(bos);
-            kryo.writeObject(output, table);
-            fos.close();
-        }catch(IOException e){
-            e.printStackTrace();
+            out = new ObjectOutputStream(new BufferedOutputStream(new FileOutputStream("../page-table.bin")));
+            out.writeObject(table);
+            out.reset();
+        }finally{
+            if (out != null){
+                out.close();
+            }
         }
     }
 

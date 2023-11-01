@@ -20,8 +20,7 @@ public class IntermediatePostingGenerator {
     private List<Posting> postingBuffer;
     private long bufferSize;
     private static final String TEMP_DIRECTORY = "../temp-files";
-    private StopWatch stopWatch;
-//    private Object sortWriteLock;
+//    private StopWatch stopWatch;
 
     public IntermediatePostingGenerator(long bufferSize) throws IOException {
         this.bufferSize = bufferSize;
@@ -31,7 +30,7 @@ public class IntermediatePostingGenerator {
             directory.mkdirs();
         }
         postingBuffer = new ArrayList<Posting>();
-        stopWatch = StopWatch.createStarted();
+//        stopWatch = StopWatch.createStarted();
     }
 
     //add postings to "buffer" list. when list reaches a certain number of postings, the postings will be written to file and the list will be cleared.
@@ -42,9 +41,9 @@ public class IntermediatePostingGenerator {
             if (postingBuffer.size() >= bufferSize) {
                 // If buffer is full, sort postings and write to file
                 Collections.sort(postingBuffer, (a, b) -> a.compareTo(b));
-                stopWatch.stop();
-                System.out.println("It took " + stopWatch.getTime(TimeUnit.SECONDS) + " seconds to collect " + bufferSize + " postings.");
-                stopWatch = StopWatch.createStarted();
+//                stopWatch.stop();
+//                System.out.println("It took " + stopWatch.getTime(TimeUnit.SECONDS) + " seconds to collect " + bufferSize + " postings.");
+//                stopWatch = StopWatch.createStarted();
                 writePostingsToFile();
                 postingBuffer.clear();
             }
@@ -61,7 +60,7 @@ public class IntermediatePostingGenerator {
         ObjectOutputStream out = null;
 
         try {
-            StopWatch writeStopWatch = StopWatch.createStarted();
+//            StopWatch writeStopWatch = StopWatch.createStarted();
             //use buffered output stream to reduce I/O overhead
             fos = new FileOutputStream(filePath);
             bos = new BufferedOutputStream(fos);
@@ -76,9 +75,10 @@ public class IntermediatePostingGenerator {
 //                    stopWatch.stop();
 //                }
             }
+            output.close();
 //            System.out.println("It takes " + stopWatch.getTime(TimeUnit.SECONDS) + " seconds to serialize 1,000,000 postings.");
-            writeStopWatch.stop();
-            System.out.println("It takes " + writeStopWatch.getTime(TimeUnit.SECONDS) + " seconds to serialize " + bufferSize + " postings.");
+//            writeStopWatch.stop();
+//            System.out.println("It takes " + writeStopWatch.getTime(TimeUnit.SECONDS) + " seconds to serialize " + bufferSize + " postings.");
         } catch (IOException e) {
             e.printStackTrace();
         } finally {

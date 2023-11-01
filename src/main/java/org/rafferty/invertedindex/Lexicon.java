@@ -17,17 +17,16 @@ public class Lexicon {
     }
 
     //write finished lexicon to file
-    public void write(){
+    public void write() throws IOException {
+        ObjectOutputStream out = null;
         try{
-            File file = new File("../lexicon.bin");
-            FileOutputStream fos = new FileOutputStream(file);
-            BufferedOutputStream bos = new BufferedOutputStream(fos);
-            Kryo kryo = new Kryo();
-            Output output = new Output(bos);
-            kryo.writeObject(output, lexicon);
-            fos.close();
-        }catch(IOException e){
-            e.printStackTrace();
+            out = new ObjectOutputStream(new BufferedOutputStream(new FileOutputStream("../lexicon.bin")));
+            out.writeObject(lexicon);
+            out.reset();
+        }finally{
+            if(out != null){
+                out.close();
+            }
         }
 
     }

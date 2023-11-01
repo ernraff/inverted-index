@@ -67,7 +67,7 @@ public class TRECProcessor {
 
                         generator.processPostings(postings);
 
-//                        if (parser.getTotalDocsParsed() == 30000) {
+//                        if (parser.getTotalDocsParsed() == 1500000) {
 //                            return;
 //                        }
                     }
@@ -130,11 +130,6 @@ public class TRECProcessor {
         System.out.println("Writing lexicon to file.");
         lexicon.write();
 
-        //print final file size in mb
-        long byteLength = processor.merger.getFileSize();
-        long MEGABYTE = 1024L * 1024L;
-        long megabyteLength = byteLength / MEGABYTE;
-        System.out.println("Final inverted index size: " + megabyteLength);
     }
 }
 

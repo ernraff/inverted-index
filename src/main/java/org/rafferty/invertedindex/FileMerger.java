@@ -1,6 +1,7 @@
 package org.rafferty.invertedindex;
 
 import java.io.*;
+import java.nio.BufferUnderflowException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,6 +26,9 @@ public class FileMerger {
     private IntermediatePostingGenerator generator;
     private Lexicon lexicon;
     private int blockSize = 64; // number of postings per block
+//    private List<Integer> docIds;
+//    private List<Integer> frequencies;
+
     private List<Integer> docIds;
     private List<Integer> frequencies;
 
@@ -42,8 +46,8 @@ public class FileMerger {
 
     private long fileSize = 0L;
 
-    private static int outPutBufferSize = 20000000;
-    private static int inPutBufferSize = 5000000;
+//    private static int outPutBufferSize = 10000000;
+//    private static int inPutBufferSize = 10000;
     private Kryo kryo;
     private Output output;
 
@@ -58,14 +62,14 @@ public class FileMerger {
         lexicon = new Lexicon();
         file = new File(mergedFilename);
         fos = new FileOutputStream(file);
-        bos = new BufferedOutputStream(fos, outPutBufferSize);
+        bos = new BufferedOutputStream(fos);
         channel = fos.getChannel();
         kryo = new Kryo();
         output = new Output(bos);
 
     }
 
-    public void merge(String inputDirectory){
+    public void merge(String inputDirectory) throws IOException {
         //get list of files in directory
         List<String> temporaryFiles = Stream.of(new File(inputDirectory).listFiles())
                                                 .filter(file -> !file.isDirectory())
@@ -86,7 +90,7 @@ public class FileMerger {
                 File current_file = new File(file);
                 FileInputStream fis = new FileInputStream(current_file);
                 fstreams.add(fis);
-                BufferedInputStream bufferedStream = new BufferedInputStream(fis, inPutBufferSize);
+                BufferedInputStream bufferedStream = new BufferedInputStream(fis);
                 bufferedStreams.add(bufferedStream);
                 inputs.add(new Input(bufferedStream));
             }catch(IOException e){
@@ -114,10 +118,10 @@ public class FileMerger {
             }
 
             while (!heap.isEmpty()) {
-                System.out.println("Polling heap.");
+//                System.out.println("Polling heap.");
                 PostingSortHelper ps = heap.poll();
                 if (!ps.getPosting().getTerm().equals(currentTerm)) {
-                    System.out.println("collected all for one term.");
+//                    System.out.println("collected all for one term.");
                     //initialize LexiconEntry
                     LexiconEntry entry = new LexiconEntry();
                     //get the number of postings in our last block
@@ -127,18 +131,16 @@ public class FileMerger {
                     entry.setDocumentCount(documentCount);
                     entry.setNumOfBlocks(numOfBlocks);
                     //write our chunk to file
-                    System.out.println("time to write chunck to file.");
                     writeChunkToFile(entry);
-                    //clear all of our lists for the next chunk (next inverted list)
-                    System.out.println("resetting chunk.");
+                    //reset chunk
+                    resetChunk();
                     //set currentTerm to next term
                     this.currentTerm = ps.getPosting().getTerm();
                     //add entry to lexicon
-                    System.out.println("adding entry to lexicon");
                     lexicon.put(currentTerm, entry);
                 }
                 if (docIds.size() >= blockSize) {
-                    System.out.println("we're at block size.");
+//                    System.out.println("we're at block size.");
                     //we are at block size
                     //store the last block id in each block
                     numOfBlocks++;
@@ -150,20 +152,26 @@ public class FileMerger {
                 int index = ps.getIndex();
                 Input input = inputs.get(index);
                 try {
-                    System.out.println("reading in next posting");
 //                            System.out.println("got posting!");
-                    Posting p = new Posting();
-                    p.read(kryo, input);
-                    heap.offer(new PostingSortHelper(p, index));
+                    if(!input.eof()){
+                        Posting p = new Posting();
+                        p.read(kryo, input);
+                        heap.offer(new PostingSortHelper(p, index));
 //                            System.out.println("added to heap!");
-                    System.out.println("next posting added to heap.");
-                } catch (Exception e) {
+                    }else{
+                        System.out.println("Reached end of this file.");
+                    }
+                } catch (BufferUnderflowException e) {
                     e.printStackTrace();
                 }
             }
             bos.flush();
         }catch(Exception e){
             e.printStackTrace();
+        }finally{
+            if(bos != null){
+                bos.close();
+            }
         }
 
         fileSize = file.length();
@@ -193,7 +201,6 @@ public class FileMerger {
 
     //use variable length byte encoding to compress document IDs and frequencies
     public byte[] varByteEncode(int data){
-        System.out.println("encoding integer");
         //find out how many bytes we need to represent the integer
         int numBytes = ((32 - Integer.numberOfLeadingZeros(data)) + 6) / 7;
         numBytes = numBytes > 0 ? numBytes : 1;
@@ -207,7 +214,6 @@ public class FileMerger {
         }
         //reset the MSB on the last byte
         output[0] &= 0b01111111;
-        System.out.println("done encoding integer");
         return output;
     }
 
@@ -218,9 +224,21 @@ public class FileMerger {
             //add start position of list to lexicon entry
             entry.setStartOffset(channel.position());
             //write metadata to file
-            kryo.writeObject(output, lastDocIDs);
-            kryo.writeObject(output, docIdBlockSizes);
-            kryo.writeObject(output, frequencyBlockSizes);
+//            kryo.writeObject(output, lastDocIDs);
+            bos.write(varByteEncode(lastDocIDs.size()));
+            for(int lastDocID: lastDocIDs){
+                bos.write(varByteEncode(lastDocID));
+            }
+//            kryo.writeObject(output, docIdBlockSizes);
+            bos.write(varByteEncode(docIdBlockSizes.size()));
+            for(int docIdBlockSize: docIdBlockSizes){
+                bos.write(varByteEncode(docIdBlockSize));
+            }
+//            kryo.writeObject(output, frequencyBlockSizes);
+            bos.write(varByteEncode(frequencyBlockSizes.size()));
+            for(int frequencyBlockSize: frequencyBlockSizes){
+                bos.write(varByteEncode(frequencyBlockSize));
+            }
             //write compressed document IDs and frequencies to file.
             int i = 0;
             int j = 0;
@@ -229,28 +247,26 @@ public class FileMerger {
                 for (int n = 0; n < blockSize; n++) {
                     if (i < docIds.size()) {
                         byte[] encodedId = varByteEncode(docIds.get(i));
-                        kryo.writeObject(output, encodedId);
+//                        kryo.writeObject(output, encodedId);
+                        bos.write(encodedId);
                         i++;
                     }
                 }
-                System.out.println("encoded 64 block IDs.");
                 for (int n = 0; n < blockSize; n++) {
                     if (j < frequencies.size()) {
                         byte[] encodedFrequency = varByteEncode(frequencies.get(j));
-                        kryo.writeObject(output, encodedFrequency);
+//                        kryo.writeObject(output, encodedFrequency);
+                        bos.write(encodedFrequency);
                         j++;
                     }
                 }
-                System.out.println("encoded 64 frequencies.");
-                System.out.println("moving on to next blocks.");
             }
-            System.out.println("id and frequency blocks written to file.");
             //add end position of list to lexicon entry
             entry.setEndOffset(channel.position());
 //            writeStopWatch.stop();
             //clear all lists and reset variables
-            resetChunk();
-            System.out.println("chunk written to file in " + writeStopWatch.getTime(TimeUnit.SECONDS) + " seconds.");
+//            resetChunk();
+//            System.out.println("chunk written to file in " + writeStopWatch.getTime(TimeUnit.SECONDS) + " seconds.");
 
         }catch (IOException e){
             e.printStackTrace();

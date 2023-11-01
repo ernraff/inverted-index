@@ -13,7 +13,6 @@ import org.apache.commons.lang3.StringUtils;
  */
 public class DocumentParser {
     private IntermediatePostingGenerator generator;
-    private String currentURL = null;
     private int currentDocID = 1;
     private PageTable pageTable;
 
